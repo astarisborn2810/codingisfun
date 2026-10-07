@@ -1,0 +1,236 @@
+GITHUB COPILOT PROMPTS - WORKDAY WELLNESS PARTNER API
+
+ORDER OF EXECUTION
+==================
+
+1. Repository Analysis
+2. Implementation Design
+3. SSM Configuration Layer
+4. PKCS12 Certificate Loading
+5. RS512 JWT Assertion Generator
+6. mTLS HTTP Client Configuration
+7. Token Acquisition and Caching
+8. Wellness API Endpoint Integration
+9. Error Handling and Security Review
+10. Comprehensive Testing
+11. Operational Readiness Components
+12. Final Architecture and Code Review
+
+
+PROMPT 1 - Repository Analysis
+===============================
+
+Act as a senior Java and AWS solution architect.
+
+Analyze this existing Spring Boot repository before making any code changes.
+
+We need to add Workday Wellness Partner API integration as one or more endpoints within this existing API service. This must not be created as a separate Spring Boot application.
+
+Inspect the repository and identify:
+
+1. Spring Boot and Java versions.
+2. Build tool and dependencies.
+3. Existing package structure.
+4. Existing controller/service/config patterns.
+5. Existing AWS SDK usage.
+6. Existing HTTP client technology.
+7. Existing authentication and token caching patterns.
+8. Logging, metrics and tracing patterns.
+9. Testing approach.
+10. Configuration conventions.
+
+Do not generate implementation code yet.
+
+Return repository assessment, impacted files, implementation plan and risks.
+
+
+PROMPT 2 - Implementation Design
+=================================
+
+Create a detailed implementation design for adding Workday Wellness Partner API authentication to this existing Spring Boot API service.
+
+Include:
+
+- Startup flow
+- SSM parameter loading
+- S3 PKCS12 retrieval
+- SSLContext creation
+- JWT generation
+- OAuth token retrieval
+- Token caching strategy
+- Wellness API call flow
+- Security controls
+- Testing approach
+
+Do not generate code yet.
+
+
+PROMPT 3 - SSM Configuration Layer
+==================================
+
+Implement configuration loading from AWS Parameter Store.
+
+Load:
+
+- client-id
+- kid
+- scope
+- token-url
+- cert-bucket
+- cert-key
+- cert-password
+
+Validate configuration during startup.
+
+Generate configuration classes and tests.
+
+
+PROMPT 4 - PKCS12 Certificate Loader
+=====================================
+
+Implement in-memory PKCS12 loading from S3.
+
+Requirements:
+
+- Download certificate as byte[]
+- Load using ByteArrayInputStream
+- KeyStore.getInstance("PKCS12")
+- Build SSLContext
+- Never write certificate to disk
+- Add tests
+
+
+PROMPT 5 - JWT Assertion Generator
+==================================
+
+Implement OAuth JWT assertion generation.
+
+Header:
+
+alg=RS512
+kid=<configured kid>
+
+Claims:
+
+iss=client-id
+sub=client-id
+aud=token-url
+iat=current time
+exp=iat+300
+jti=UUID
+
+Generate tests validating claims and signature.
+
+
+PROMPT 6 - mTLS HTTP Client
+===========================
+
+Configure Workday-specific mTLS HTTP client.
+
+Use SSLContext from PKCS12.
+
+Use same client for token and Wellness APIs.
+
+Enable hostname verification and secure TLS validation.
+
+Add timeouts and tests.
+
+
+PROMPT 7 - Token Acquisition and Caching
+=========================================
+
+Implement Workday OAuth token provider.
+
+Token request:
+
+grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer
+assertion=<jwt>
+scope=wellness
+
+Requirements:
+
+- Cache token
+- Refresh 60s before expiry
+- Thread-safe
+- Prevent simultaneous refresh
+- Add concurrency tests
+
+
+PROMPT 8 - Wellness Endpoint Integration
+=========================================
+
+Add endpoint inside the existing API service.
+
+Pattern:
+
+POST <base-path>/workday/wellness/<operation>
+
+Requirements:
+
+- Delegate auth logic to services
+- Obtain token from token provider
+- Use mTLS client
+- Return existing response model
+- Add controller/service/client tests
+
+
+PROMPT 9 - Security Review
+===========================
+
+Review implementation for:
+
+- Secret leakage
+- JWT logging
+- Token exposure
+- Trust-all TLS
+- Missing validation
+- Retry issues
+- Concurrent refresh issues
+
+Provide findings by severity and code fixes.
+
+
+PROMPT 10 - Comprehensive Testing
+==================================
+
+Generate:
+
+- Unit tests
+- Integration tests
+- mTLS tests
+- Token caching tests
+- JWT validation tests
+- Startup validation tests
+- Secret redaction tests
+
+Provide full test matrix.
+
+
+PROMPT 11 - Operational Readiness
+=================================
+
+Implement:
+
+- Health indicators
+- Metrics
+- Observability
+- Alerting recommendations
+- Startup diagnostics
+
+Do not expose secrets.
+
+
+PROMPT 12 - Final Review
+========================
+
+Validate:
+
+- Architecture compliance
+- JWT requirements
+- Token caching
+- PKCS12 handling
+- SSM usage
+- Security controls
+- Test coverage
+
+Return pass/fail assessment, findings, patches and review checklist.
