@@ -1,236 +1,26 @@
-GITHUB COPILOT PROMPTS - WORKDAY WELLNESS PARTNER API
-
-ORDER OF EXECUTION
-==================
-
-1. Repository Analysis
-2. Implementation Design
-3. SSM Configuration Layer
-4. PKCS12 Certificate Loading
-5. RS512 JWT Assertion Generator
-6. mTLS HTTP Client Configuration
-7. Token Acquisition and Caching
-8. Wellness API Endpoint Integration
-9. Error Handling and Security Review
-10. Comprehensive Testing
-11. Operational Readiness Components
-12. Final Architecture and Code Review
-
-
-PROMPT 1 - Repository Analysis
-===============================
-
-Act as a senior Java and AWS solution architect.
-
-Analyze this existing Spring Boot repository before making any code changes.
-
-We need to add Workday Wellness Partner API integration as one or more endpoints within this existing API service. This must not be created as a separate Spring Boot application.
-
-Inspect the repository and identify:
-
-1. Spring Boot and Java versions.
-2. Build tool and dependencies.
-3. Existing package structure.
-4. Existing controller/service/config patterns.
-5. Existing AWS SDK usage.
-6. Existing HTTP client technology.
-7. Existing authentication and token caching patterns.
-8. Logging, metrics and tracing patterns.
-9. Testing approach.
-10. Configuration conventions.
-
-Do not generate implementation code yet.
-
-Return repository assessment, impacted files, implementation plan and risks.
-
-
-PROMPT 2 - Implementation Design
-=================================
-
-Create a detailed implementation design for adding Workday Wellness Partner API authentication to this existing Spring Boot API service.
-
-Include:
-
-- Startup flow
-- SSM parameter loading
-- S3 PKCS12 retrieval
-- SSLContext creation
-- JWT generation
-- OAuth token retrieval
-- Token caching strategy
-- Wellness API call flow
-- Security controls
-- Testing approach
-
-Do not generate code yet.
-
-
-PROMPT 3 - SSM Configuration Layer
-==================================
-
-Implement configuration loading from AWS Parameter Store.
-
-Load:
-
-- client-id
-- kid
-- scope
-- token-url
-- cert-bucket
-- cert-key
-- cert-password
-
-Validate configuration during startup.
-
-Generate configuration classes and tests.
-
-
-PROMPT 4 - PKCS12 Certificate Loader
-=====================================
-
-Implement in-memory PKCS12 loading from S3.
-
-Requirements:
-
-- Download certificate as byte[]
-- Load using ByteArrayInputStream
-- KeyStore.getInstance("PKCS12")
-- Build SSLContext
-- Never write certificate to disk
-- Add tests
-
-
-PROMPT 5 - JWT Assertion Generator
-==================================
-
-Implement OAuth JWT assertion generation.
-
-Header:
-
-alg=RS512
-kid=<configured kid>
-
-Claims:
-
-iss=client-id
-sub=client-id
-aud=token-url
-iat=current time
-exp=iat+300
-jti=UUID
-
-Generate tests validating claims and signature.
-
-
-PROMPT 6 - mTLS HTTP Client
-===========================
-
-Configure Workday-specific mTLS HTTP client.
-
-Use SSLContext from PKCS12.
-
-Use same client for token and Wellness APIs.
-
-Enable hostname verification and secure TLS validation.
-
-Add timeouts and tests.
-
-
-PROMPT 7 - Token Acquisition and Caching
-=========================================
-
-Implement Workday OAuth token provider.
-
-Token request:
-
-grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer
-assertion=<jwt>
-scope=wellness
-
-Requirements:
-
-- Cache token
-- Refresh 60s before expiry
-- Thread-safe
-- Prevent simultaneous refresh
-- Add concurrency tests
-
-
-PROMPT 8 - Wellness Endpoint Integration
-=========================================
-
-Add endpoint inside the existing API service.
-
-Pattern:
-
-POST <base-path>/workday/wellness/<operation>
-
-Requirements:
-
-- Delegate auth logic to services
-- Obtain token from token provider
-- Use mTLS client
-- Return existing response model
-- Add controller/service/client tests
-
-
-PROMPT 9 - Security Review
-===========================
-
-Review implementation for:
-
-- Secret leakage
-- JWT logging
-- Token exposure
-- Trust-all TLS
-- Missing validation
-- Retry issues
-- Concurrent refresh issues
-
-Provide findings by severity and code fixes.
-
-
-PROMPT 10 - Comprehensive Testing
-==================================
-
-Generate:
-
-- Unit tests
-- Integration tests
-- mTLS tests
-- Token caching tests
-- JWT validation tests
-- Startup validation tests
-- Secret redaction tests
-
-Provide full test matrix.
-
-
-PROMPT 11 - Operational Readiness
-=================================
-
-Implement:
-
-- Health indicators
-- Metrics
-- Observability
-- Alerting recommendations
-- Startup diagnostics
-
-Do not expose secrets.
-
-
-PROMPT 12 - Final Review
-========================
-
-Validate:
-
-- Architecture compliance
-- JWT requirements
-- Token caching
-- PKCS12 handling
-- SSM usage
-- Security controls
-- Test coverage
-
-Return pass/fail assessment, findings, patches and review checklist.
+APPROVED, with these decisions.
+
+TRANSPORT: approved = common-api-client CommonRestClientBuilder with sslContext(...) (Apache HC5), conditional on this verification gate. Complete it and report the result BEFORE writing the Workday client code (in Prompt 2):
+G1. Build a PRIVATE client instance for Workday only. It must not create or modify any shared or primary bean and must not mutate the default internal RestClient configuration.
+G2. Common outbound header/body logging must be disabled or bypassed for Workday requests (the token request carries the signed assertion, the token response carries the access token). Prove it with a log-capture test. If it cannot be disabled for this client only, STOP and use the fallback.
+G3. Hostname verification stays ON (default verifier), default JVM truststore, TLS 1.2/1.3 only. Prove with tests, including: a client without a certificate is rejected by the test server, and a server with the wrong hostname is rejected.
+G4. The same client instance serves token and API calls; timeouts and pool size come from workday.* properties.
+
+FALLBACK if any gate fails: JDK HttpClient + RestClient (JdkClientHttpRequestFactory) held privately inside WorkdayMtlsClient. Tell me which path you took and why.
+
+Read the response body as a String and parse it with a private Jackson 3 JsonMapper, so we do not depend on the builder's message converters.
+
+OTHER DECISIONS:
+
+1. Package: com.pearl.configuration.workday (sub-packages config, aws, tls, auth, api, health). Replace com.pearl.workday everywhere.
+2. Config: application.properties only (no YAML, no profiles). Add workday.* keys with workday.enabled=false; each environment enables it through environment variables (WORKDAY_ENABLED=true and so on). Ignore any "dev profile" wording.
+3. AWS SDK: keep the project's BOM at 2.28.0; do NOT change it. Add software.amazon.awssdk:s3 with no version. The 2.54.8 in my instructions is the parent's value, not this project's.
+4. Beans: no Clock bean, so use a private Clock.systemUTC() (injectable in tests). No S3Client/SsmClient beans, so build private clients inside our loaders (do not depend on the existing SecretManager helper). MeterRegistry via ObjectProvider (skip metrics if absent).
+5. Exceptions: extend common-error BaseRuntimeException with specific error codes. Messages and details must never contain secrets or upstream response bodies. Do NOT modify the existing @RestControllerAdvice; add a test showing it renders Workday exceptions, and propose (do not apply) changes if it mishandles them.
+6. Retry: feature-local bounded retry (Spring Framework 7 core retry or a small loop). Do not use Resilience4j.
+7. Jackson: new code uses Jackson 3 (tools.jackson) in a private JsonMapper. Do not touch existing Jackson 2 usage.
+8. Tests: use the JUnit Jupiter version the project already resolves; do not upgrade or pin it. Ignore "JUnit 6" in my prompts. There is no @SpringBootTest base, so use ApplicationContextRunner to test workday.enabled false/true, plain unit tests, and the JDK HttpsServer for mTLS.
+9. Do not add common-error-message or common-utilities (not on the classpath).
+10. Actuator is at the root URL (/health, /metrics). Do not change exposure or security. The health indicator must show minimal details and no secrets; check the existing show-details setting before adding any detail.
+
+Where a later prompt conflicts with these decisions, these decisions win. Do not write any code yet; wait for me to send Prompt 1.
